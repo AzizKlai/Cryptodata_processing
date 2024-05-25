@@ -16,7 +16,7 @@ End-to-end big data pipeline that deals with cryptocurrency data with batch and 
 
 - **Stream Processing:**
   - Windows aggregation: Calculate mean price value.
-  - Calculate total_supply: Market cap = Circulating supply * Price.
+  - Calculate missing field like total_supply.
   - Calculate percentage: Volume and market_cap market share percentage.
   - Price tracking.
 
