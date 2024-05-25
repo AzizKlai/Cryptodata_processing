@@ -1,6 +1,6 @@
 # Cryptodata Processing
 
-End-to-end big data pipeline that deals with cryptocurrency data with batch and real-time stream processing fetching data from [Coinranking API v2](https://developers.coinranking.com/api).
+End-to-end big data pipeline that deals with cryptocurrency data with batch and real-time stream processing fetching data from [Coinranking API](https://developers.coinranking.com/api) v2.
 
 ## Architecture
 
@@ -15,15 +15,15 @@ End-to-end big data pipeline that deals with cryptocurrency data with batch and 
 ## Functionalities
 
 - **Stream Processing:**
-  - Windows aggregation of window duration: Calculate mean price value.
+  - Windows aggregation: Calculate mean price value.
   - Calculate total_supply: Market cap = Circulating supply * Price.
   - Calculate percentage: Volume and market_cap market share percentage.
   - Price tracking.
 
 - **Batch Processing:**
-  - Data aggregation by month and by year with the calculation of other fields like highest_high, lowest_low.
+  - Data aggregation by month and by year with the calculation of other fields like highest_high, lowest_low, first_open, last_close.
   - Market_cap ranking top10.
-  - Crypto data summary (by year: min max price).
+  - Crypto data summary for all time (min max price).
 
 ## Usage
 
