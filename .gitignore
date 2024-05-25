@@ -1,0 +1,20 @@
+
+/crypto_batch/batch-spark/outputcsv/
+
+
+
+
+/crypto_batch/csv/
+
+#target
+/crypto_stream/stream-kafka-producer/target/
+/crypto_stream/stream-spark-consumer/target/
+/crypto_batch/batch-spark/target/
+
+# Container volumes
+/sparkConsumer/
+/grafana-storage/
+/cassandraData/
+
+# Other files
+/notingit.txt

@@ -1,0 +1,38 @@
+version: "1.0"
+
+services:
+
+  
+  hadoop-master:
+      image: liliasfaxi/hadoop-cluster:latest
+      container_name: hadoop-master
+      hostname: hadoop-master
+      ports:  
+          - "9870:9870"
+          - "8088:8088"
+          - "7077:7077"
+          - "16010:16010"
+      networks:
+          - crypto  
+  
+  hadoop-worker1:
+      image: liliasfaxi/hadoop-cluster:latest
+      container_name: hadoop-worker1
+      hostname: hadoop-worker1
+      ports:  
+          - "8040:8042"
+      networks:
+          - crypto  
+
+  hadoop-worker2:
+      image: liliasfaxi/hadoop-cluster:latest
+      container_name: hadoop-worker2
+      hostname: hadoop-worker2
+      ports:  
+          - "8041:8042"
+      networks:
+          - crypto 
+networks:
+  crypto:
+    driver: bridge
+

@@ -1,0 +1,128 @@
+package kafka.producer;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+public class KafkaStreamProducer {
+
+    private static final String API_URL = "https://api.coinranking.com/v2/coins";
+    private static final String TOPIC_NAME = "crypto";
+    private static final Integer TIME_STAMP = 15000;
+
+   // private static final HttpClient httpClient = HttpClient.newHttpClient();
+    private static final Producer<String, String> producer = createKafkaProducer();
+
+
+    private static Producer<String, String> createKafkaProducer() {
+        // Configure Kafka producer
+        Properties properties = new Properties();
+        // Assigner l'identifiant du serveur kafka
+        properties.put("bootstrap.servers", "kafka:9092");//"localhost:9092");
+        // Definir un acquittement pour les requetes du producteur
+        properties.put("acks", "all");
+        properties.put("key.serializer", StringSerializer.class.getName());
+        properties.put("value.serializer", StringSerializer.class.getName());
+        Producer<String, String> producer = new KafkaProducer<>(properties);
+       return producer;
+    }
+    /*
+    private static JSONArray fetchCoinsFromAPI() throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(API_URL))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        return new JSONObject(response.body()).getJSONObject("data").getJSONArray("coins");
+    }*/
+    private static JSONArray fetchCoinsFromAPI() throws IOException {
+        URL url = new URL(API_URL);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+        connection.setRequestProperty("Content-Type", "application/json");
+    
+        StringBuilder response = new StringBuilder();
+        try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+            String line;
+            while ((line = in.readLine()) != null) {
+                response.append(line);
+            }
+        }
+    
+        return new JSONObject(response.toString()).getJSONObject("data").getJSONArray("coins");
+    }
+    /*
+    private static Map<String, Object> parseCoinData(JSONObject coinData) {
+        try {
+            return Map.of(
+                    "name_coin", coinData.getString("name"),
+                    "symbol_coin", coinData.getString("symbol"),
+                    "id", coinData.getString("uuid"),
+                    //"number_of_markets", coinData.getInt("numberOfMarkets"),
+                    "volume", coinData.getDouble("24hVolume"),
+                    "market_cap", coinData.getString("marketCap"),
+                    "price", coinData.getString("price"),
+                    "percent_change_24hr", coinData.getDouble("change"),
+                    "timestamp", System.currentTimeMillis()
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }*/
+    
+private static Map<String, Object> parseCoinData(JSONObject coinData) {
+    try {
+        Map<String, Object> parsedData = new HashMap<>();
+        parsedData.put("name_coin", coinData.getString("name"));
+        parsedData.put("symbol_coin", coinData.getString("symbol"));
+        parsedData.put("id", coinData.getString("uuid"));
+        parsedData.put("volume", coinData.getDouble("24hVolume"));
+        parsedData.put("market_cap", coinData.getString("marketCap"));
+        parsedData.put("price", coinData.getString("price"));
+        parsedData.put("percent_change_24hr", coinData.getDouble("change"));
+        parsedData.put("timestamp", System.currentTimeMillis());
+
+        return parsedData;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+    }
+}
+
+    public static void main(String[] args) {
+
+            try {
+                while (true) {
+                    JSONArray coins = fetchCoinsFromAPI();
+                    if (coins != null) {
+                        coins.forEach(coin -> {
+                            JSONObject coinData = (JSONObject) coin;
+                            Map<String, Object> message = parseCoinData(coinData);
+                            if (message != null) {
+                                System.out.println("Sending message: " + new JSONObject(message).toString());
+                                producer.send(new ProducerRecord<>(TOPIC_NAME, coinData.getString("uuid"), new JSONObject(message).toString()));
+                            }
+                        });
+                        producer.flush();
+                    }
+                    Thread.sleep(TIME_STAMP); // Sleep for 10 seconds
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                producer.close();
+            }
+}
+}

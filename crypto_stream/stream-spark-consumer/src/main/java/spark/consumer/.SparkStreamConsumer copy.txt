@@ -1,0 +1,188 @@
+package spark.consumer;
+
+import org.apache.spark.sql.*;
+import org.apache.spark.sql.streaming.StreamingQuery;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
+
+import static org.apache.spark.sql.functions.*;
+
+import org.apache.hadoop.shaded.org.eclipse.jetty.websocket.common.frames.DataFrame;
+import org.apache.spark.sql.api.java.UDF1;
+import org.apache.spark.sql.expressions.UserDefinedFunction;
+import static org.apache.spark.sql.functions.*;
+
+
+
+public class SparkStreamConsumer {
+
+    private static final String TOPIC_NAME = "crypto";
+    private static final String GROUP_ID = "myconsumergroup";
+    private static final String BOOTSTRAP_SERVER= "kafka:9092";//"localhost:9092";
+    //private static final Integer TIME_STAMP = 10000;
+
+    private static final String WATERMARK_THRESHOLD = "300 seconds"; // Maximum allowed time after event time before a record is considered late
+    private static final String WINDOW_DURATION = "300 seconds"; // Duration of the window for aggregations
+    private static final String SLIDE_DURATION = "30 seconds"; // Duration for updating the window and triggering computations
+    public static void main(String[] args) throws Exception {
+
+  
+
+        String master = "local[4]";
+        
+        SparkSession spark = SparkSession
+                .builder()
+                .appName(SparkStreamConsumer.class.getName())
+                .config("spark.cassandra.connection.host", "cassandra")//"localhost")
+                .config("spark.cassandra.connection.port","9042" )
+                .master(master)//for local dev
+                .getOrCreate();
+                
+                // Create input DataFrame representing the stream of input lines from Kafka
+                Dataset<Row> inputDF = spark
+                        .readStream()
+                        .format("kafka")
+                        .option("kafka.bootstrap.servers", BOOTSTRAP_SERVER)
+                        .option("subscribe", TOPIC_NAME)
+                       // .option("kafka.group.id", GROUP_ID)
+                        .load();
+                
+
+                        /////////////////trunk
+                        // Define the UDF
+                //UDF1<Long, String> truncateTimestamp = (Long timestamp) -> String.valueOf(timestamp).substring(0, String.valueOf(timestamp).length() - 3);
+
+                // Register the UDF
+              //  spark.udf().register("truncateTimestamp", truncateTimestamp, DataTypes.StringType);
+
+
+                        /////////////////////////
+                        
+                // Parse the data into schema
+                Dataset<Row> parsedInput = inputDF.selectExpr("CAST(value AS STRING)")
+                        .select(from_json(col("value"), schema).as("data"))
+                        .select("data.*");
+                        //cast price to double
+                Dataset<Row> castedInput = parsedInput.withColumn("price", parsedInput.col("price").cast("double"))
+                                                      .withColumn("number_of_markets", parsedInput.col("number_of_markets").cast("double"))
+                                                      .withColumn("volume", parsedInput.col("volume").cast("double"))
+                                                      .withColumn("market_cap", parsedInput.col("market_cap").cast("double"))
+                                                      .withColumn("total_supply", parsedInput.col("total_supply").cast("double"))
+                                                      .withColumn("timestamp", parsedInput.col("timestamp").cast("timestamp"));
+               
+               
+                StreamingQuery query = castedInput
+                        .writeStream()
+                        .foreachBatch((batchDF, batchId) -> {
+                            batchDF.write()
+                                .format("org.apache.spark.sql.cassandra")
+                                .option("keyspace", "crypto")
+                                .option("table", "crypto_realtime_prices")
+                                .mode("append")
+                                .save();
+                        })
+                        .outputMode("update")
+                        .start();
+
+
+                 System.out.println("windows data frame mean compulting");
+                Dataset<Row> windowedDF = castedInput
+                        .withWatermark("timestamp", WATERMARK_THRESHOLD)
+                        .groupBy(
+                                window(col("timestamp"), WINDOW_DURATION, SLIDE_DURATION),
+                                col("symbol_coin"))
+                        .agg(
+                                avg(col("price")).as("arithmetic_mean"),   // calculate arithmetic mean
+                                expr("exp(avg(log(price)))").as("geometric_mean"), // Calculate geometric mean
+                                expr("1 / avg(1 / price)").as("harmonic_mean")) // Calculate harmonic mean
+                        .withColumn("start_time", col("window").getField("start"))
+                        .withColumn("end_time", col("window").getField("end"))
+                        .drop("window");
+
+                        StreamingQuery queryAggregate = windowedDF
+                        .writeStream()
+                        .foreachBatch((batchDF, batchId) -> {
+                                batchDF.write()
+                                .format("org.apache.spark.sql.cassandra")
+                                .option("keyspace", "crypto")
+                                .option("table", "crypto_rolling_means")
+                                .mode("append")
+                                .save();
+                        })
+                        .outputMode("update")
+                        .start();
+
+        
+                        System.out.println("losers and winners computing");
+
+  /// save biggest winners and biggest losers
+        Dataset<Row> biggestdf = castedInput .groupBy("name_coin")
+        .agg(   max("price").as("price"), 
+                max("percent_change_24hr").alias("percent_change"));
+        Dataset<Row> biggestWinners=biggestdf.orderBy(col("percent_change").desc())
+        .limit(10);
+        Dataset<Row> biggestLosers=biggestdf.orderBy(col("percent_change").asc())
+        .limit(10);
+        
+        // Save the top 10 biggest winners and losers to the database
+        StreamingQuery queryBiggestWinners = biggestWinners
+        .writeStream()
+        .foreachBatch((batchDF, batchId) -> {
+        batchDF.write()
+                .format("org.apache.spark.sql.cassandra")
+                .option("keyspace", "crypto")
+                .option("table", "biggest_winners")
+                .mode("append")
+                .save();
+        })
+        .outputMode("complete")
+        .start();
+
+        // Save the top 10 biggest winners and losers to the database
+        StreamingQuery queryBiggestLosers = biggestLosers
+        .writeStream()
+        .foreachBatch((batchDF, batchId) -> {
+        batchDF.write()
+                .format("org.apache.spark.sql.cassandra")
+                .option("keyspace", "crypto")
+                .option("table", "biggest_losers")
+                .mode("append")
+                .save();
+        })
+        .outputMode("complete")
+        .start();
+
+
+// Wait for all queries to terminate
+query.awaitTermination();
+queryAggregate.awaitTermination();
+queryBiggestWinners.awaitTermination();
+queryBiggestLosers.awaitTermination();
+    }
+
+
+
+    
+        static StructType schema = new StructType()
+        .add("name_coin", DataTypes.StringType )
+        .add("symbol_coin", DataTypes.StringType)
+        .add("id", DataTypes.StringType)
+        //.add("uuid", DataTypes.StringType)
+        .add("number_of_markets", DataTypes.StringType)
+        .add("volume", DataTypes.StringType)
+        .add("market_cap", DataTypes.DoubleType)
+        .add("total_supply", DataTypes.StringType)
+        //price is casted separately to Double from String
+        .add("price", DataTypes.StringType)
+        .add("price", DataTypes.StringType)
+        .add("price", DataTypes.StringType)
+        .add("percent_change_24hr", DataTypes.DoubleType)
+        .add("timestamp", DataTypes.TimestampType);
+        
+
+
+
+
+}
+
+

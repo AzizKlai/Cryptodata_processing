@@ -1,0 +1,22 @@
+producer:
+
+ cd .\crypto_stream\stream-kafka-producer\
+mvn clean compile assembly:single
+docker cp .\target\stream-kafka-producer-1.0-SNAPSHOT-jar-with-dependencies.jar spark-master:/root/producer2.jar
+
+consumer:
+
+
+ cd .\crypto_stream\stream-spark-consumer\
+mvn clean compile assembly:single
+docker cp .\target\stream-spark-consumer-1-jar-with-dependencies.jar spark-consumer-worker:/root/consumer2.jar
+
+
+
+
+consumer:
+
+
+/spark/bin/spark-submit --master spark://spark-master:7077 --class spark.consumer.SparkStreamConsumer --deploy-mode client consumer2.jar
+
+
