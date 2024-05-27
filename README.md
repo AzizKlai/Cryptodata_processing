@@ -25,6 +25,12 @@ End-to-end big data pipeline that deals with cryptocurrency data with batch and 
   - Market_cap ranking top10.
   - Crypto data summary for all time (min max price).
 
+## visualization
+![Dashboard](img/img1.png)
+
+![price](img/img2.png)
+
+![marketshare](img/img4.png)
 ## Usage
 
 **1. Run Docker Compose:**
