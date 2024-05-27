@@ -26,11 +26,11 @@ End-to-end big data pipeline that deals with cryptocurrency data with batch and 
   - Crypto data summary for all time (min max price).
 
 ## visualization
-![Dashboard](img/img1.png)
+![Dashboard](img/img1.PNG)
 
-![price](img/img2.png)
+![price](img/img2.PNG)
 
-![marketshare](img/img4.png)
+![marketshare](img/img4.PNG)
 ## Usage
 
 **1. Run Docker Compose:**
